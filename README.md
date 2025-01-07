@@ -14,6 +14,7 @@
 ## Supported Devices
 
 * Granary Feeder (PLAF103)
+* Dockstream Smart Fountain (PLWF105)
 
 ## Installation
 
