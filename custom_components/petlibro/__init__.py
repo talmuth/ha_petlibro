@@ -1,24 +1,31 @@
-from homeassistant.core import HomeAssistant
-from homeassistant.const import Platform
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.device_registry import DeviceEntry
+"""Initialize the PetLibro integration for Home Assistant.
+
+It sets up the platforms for various PetLibro devices such as feeders and fountains.
+"""
 
 from custom_components.petlibro.devices.feeders.feeder import Feeder
+from custom_components.petlibro.devices.fountains.dockstream_smart_fountain import (
+    DockstreamSmartFountain,
+)
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntry
+
+from .const import DOMAIN
 from .devices import Device
 from .devices.feeders.granary_feeder import GranaryFeeder
-from .const import DOMAIN
 from .hub import PetLibroHub
 
 type PetLibroHubConfigEntry = ConfigEntry[PetLibroHub]
 
 PLATFORMS_BY_TYPE = {
-    Feeder: (
-        Platform.SWITCH,
-    ),
-    GranaryFeeder: (
+    Feeder: (Platform.SWITCH),
+    GranaryFeeder: (Platform.SENSOR),
+    DockstreamSmartFountain: (
         Platform.SENSOR,
+        Platform.BINARY_SENSOR,
     ),
 }
 
@@ -47,14 +54,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetLibroHubConfigEntry) 
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: PetLibroHubConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: PetLibroHubConfigEntry
+) -> bool:
     """Unload a config entry."""
     platforms = get_platforms_for_devices(entry.runtime_data.devices)
     return await hass.config_entries.async_unload_platforms(entry, platforms)
 
 
-async def async_remove_config_entry_device(_: HomeAssistant, entry: PetLibroHubConfigEntry,
-                                           device_entry: DeviceEntry) -> bool:
+async def async_remove_config_entry_device(
+    _: HomeAssistant, entry: PetLibroHubConfigEntry, device_entry: DeviceEntry
+) -> bool:
     """Remove a config entry from a device."""
     return not any(
         identifier

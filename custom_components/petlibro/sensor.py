@@ -2,26 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from logging import getLogger
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
+from logging import getLogger
 from typing import Any, cast
 
-from homeassistant.components.sensor.const import SensorStateClass, SensorDeviceClass
-
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
-from homeassistant.const import UnitOfMass, UnitOfVolume
+from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
+from homeassistant.const import PERCENTAGE, UnitOfMass, UnitOfTime, UnitOfVolume
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import PetLibroHubConfigEntry
 from .devices import Device
 from .devices.feeders.feeder import Feeder
 from .devices.feeders.granary_feeder import GranaryFeeder
-from . import PetLibroHubConfigEntry
-from .entity import PetLibroEntity, _DeviceT, PetLibroEntityDescription
-
+from .devices.fountains.dockstream_smart_fountain import DockstreamSmartFountain
+from .entity import PetLibroEntity, PetLibroEntityDescription, _DeviceT
 
 _LOGGER = getLogger(__name__)
 
@@ -38,18 +37,23 @@ def icon_for_gauge_level(gauge_level: int | None = None, offset: int = 0) -> str
 
 
 def unit_of_measurement_feeder(device: Feeder) -> str | None:
+    """Return the unit of measurement for the feeder."""
     return device.unit_type
 
 
 def device_class_feeder(device: Feeder) -> SensorDeviceClass | None:
+    """Return the device class for the feeder."""
     if device.unit_type in [UnitOfMass.OUNCES, UnitOfMass.GRAMS]:
         return SensorDeviceClass.WEIGHT
     if device.unit_type in ["cup", UnitOfVolume.MILLILITERS]:
         return SensorDeviceClass.VOLUME
+    return None
 
 
 @dataclass(frozen=True)
-class PetLibroSensorEntityDescription(SensorEntityDescription, PetLibroEntityDescription[_DeviceT]):
+class PetLibroSensorEntityDescription(
+    SensorEntityDescription, PetLibroEntityDescription[_DeviceT]
+):
     """A class that describes device sensor entities."""
 
     icon_fn: Callable[[Any], str | None] = lambda _: None
@@ -67,7 +71,9 @@ class PetLibroSensorEntity(PetLibroEntity[_DeviceT], SensorEntity):  # type: ign
     def native_value(self) -> float | datetime | str | None:
         """Return the state."""
         if self.entity_description.should_report(self.device):
-            if isinstance(val := getattr(self.device, self.entity_description.key), str):
+            if isinstance(
+                val := getattr(self.device, self.entity_description.key), str
+            ):
                 return val.lower()
             return cast(float | datetime | None, val)
         return None
@@ -82,14 +88,19 @@ class PetLibroSensorEntity(PetLibroEntity[_DeviceT], SensorEntity):  # type: ign
     @cached_property
     def native_unit_of_measurement(self) -> str | None:
         """Return the native unit of measurement to use in the frontend, if any."""
-        if (native_unit_of_measurement := self.entity_description.native_unit_of_measurement_fn(self.device)) is not None:
+        if (
+            native_unit_of_measurement
+            := self.entity_description.native_unit_of_measurement_fn(self.device)
+        ) is not None:
             return native_unit_of_measurement
         return super().native_unit_of_measurement
 
     @cached_property
     def device_class(self) -> SensorDeviceClass | None:
         """Return the device class to use in the frontend, if any."""
-        if (device_class := self.entity_description.device_class_fn(self.device)) is not None:
+        if (
+            device_class := self.entity_description.device_class_fn(self.device)
+        ) is not None:
             return device_class
         return super().device_class
 
@@ -99,7 +110,7 @@ DEVICE_SENSOR_MAP: dict[type[Device], list[PetLibroSensorEntityDescription]] = {
         PetLibroSensorEntityDescription[GranaryFeeder](
             key="remaining_desiccant",
             translation_key="remaining_desiccant",
-            icon="mdi:package"
+            icon="mdi:package",
         ),
         PetLibroSensorEntityDescription[GranaryFeeder](
             key="today_feeding_quantity",
@@ -107,15 +118,56 @@ DEVICE_SENSOR_MAP: dict[type[Device], list[PetLibroSensorEntityDescription]] = {
             icon="mdi:scale",
             native_unit_of_measurement_fn=unit_of_measurement_feeder,
             device_class_fn=device_class_feeder,
-            state_class=SensorStateClass.TOTAL_INCREASING
+            state_class=SensorStateClass.TOTAL_INCREASING,
         ),
         PetLibroSensorEntityDescription[GranaryFeeder](
             key="today_feeding_times",
             translation_key="today_feeding_times",
             icon="mdi:history",
-            state_class=SensorStateClass.TOTAL_INCREASING
-        )
-    ]
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+    ],
+    DockstreamSmartFountain: [
+        PetLibroSensorEntityDescription[DockstreamSmartFountain](
+            key="water_level",
+            translation_key="water_level",
+            icon="mdi:water-percent",
+            state_class=SensorStateClass.TOTAL,
+            native_unit_of_measurement=PERCENTAGE,
+        ),
+        PetLibroSensorEntityDescription[DockstreamSmartFountain](
+            key="remaining_water",
+            translation_key="remaining_water",
+            icon="mdi:water",
+            state_class=SensorStateClass.TOTAL,
+            device_class=SensorDeviceClass.VOLUME,
+            native_unit_of_measurement=UnitOfVolume.MILLILITERS,
+        ),
+        PetLibroSensorEntityDescription[DockstreamSmartFountain](
+            key="today_water_consumption",
+            translation_key="today_water_consumption",
+            icon="mdi:fountain",
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            device_class=SensorDeviceClass.VOLUME,
+            native_unit_of_measurement=UnitOfVolume.MILLILITERS,
+        ),
+        PetLibroSensorEntityDescription[DockstreamSmartFountain](
+            key="days_before_filter_replacement",
+            translation_key="days_before_filter_replacement",
+            icon="mdi:counter",
+            state_class=SensorStateClass.MEASUREMENT,
+            device_class=SensorDeviceClass.DURATION,
+            native_unit_of_measurement=UnitOfTime.DAYS,
+        ),
+        PetLibroSensorEntityDescription[DockstreamSmartFountain](
+            key="days_before_cleaning",
+            translation_key="days_before_cleaning",
+            icon="mdi:counter",
+            state_class=SensorStateClass.MEASUREMENT,
+            device_class=SensorDeviceClass.DURATION,
+            native_unit_of_measurement=UnitOfTime.DAYS,
+        ),
+    ],
 }
 
 

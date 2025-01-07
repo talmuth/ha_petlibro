@@ -35,6 +35,29 @@
             },
             "today_feeding_times": {
                 "name": "Today's feeding times"
+            },
+            "days_before_cleaning": {
+                "name": "Days before cleaning"
+            },
+            "days_before_filter_replacement": {
+                "name": "Days before filter replacement"
+            },
+            "water_level": {
+                "name": "Current water level"
+            },
+            "remaining_water": {
+                "name": "Remaining volume of water"
+            },
+            "today_water_consumption": {
+                "name": "Today's water consumption"
+            }
+        },
+        "binary_sensor": {
+            "filter_replacement_required": {
+                "name": "Filter replacement required"
+            },
+            "cleaning_required": {
+                "name": "Cleaning required"
             }
         },
         "switch": {

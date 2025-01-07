@@ -1,19 +1,21 @@
-from logging import getLogger
+"""Module providing a PetLibro hub wrapper class for interacting with PetLibro devices."""
+
 from asyncio import gather
 from collections.abc import Mapping
-from typing import List, Any, Optional
 from datetime import timedelta
+from logging import getLogger
+from typing import Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_REGION, CONF_API_TOKEN
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from aiohttp import ClientResponseError, ClientConnectorError
-
+from aiohttp import ClientConnectorError, ClientResponseError
 from custom_components.petlibro.api import PetLibroAPI
 
-from .const import DOMAIN
+from homeassistant.const import CONF_API_TOKEN, CONF_REGION
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
 from .api import PetLibroAPIError
+from .const import DOMAIN
 from .devices import Device, product_name_map
 
 _LOGGER = getLogger(__name__)
@@ -21,15 +23,20 @@ UPDATE_INTERVAL_SECONDS = 60 * 5
 
 
 class PetLibroHub:
-    """A PetLibro hub wrapper class"""
+    """A PetLibro hub wrapper class."""
 
-    devices : List[Device] = []
+    devices: list[Device] = []
 
     def __init__(self, hass: HomeAssistant, data: Mapping[str, Any]) -> None:
-        """Init the hub"""
+        """Init the hub."""
         self._data = data
         self.session = None
-        self.api = PetLibroAPI(async_get_clientsession(hass), hass.config.time_zone, data[CONF_REGION], data[CONF_API_TOKEN])
+        self.api = PetLibroAPI(
+            async_get_clientsession(hass),
+            hass.config.time_zone,
+            data[CONF_REGION],
+            data[CONF_API_TOKEN],
+        )
 
         self.coordinator = DataUpdateCoordinator(
             hass,
@@ -39,7 +46,7 @@ class PetLibroHub:
             update_interval=timedelta(seconds=UPDATE_INTERVAL_SECONDS),
         )
 
-    async def get_device(self, serial: str) -> Optional[Device]:
+    async def get_device(self, serial: str) -> Device | None:
         """If found, return the device with the specified serial number."""
         return next(
             (device for device in self.devices if device.serial == serial),
@@ -51,13 +58,16 @@ class PetLibroHub:
         for device_data in await self.api.list_devices():
             if device := await self.get_device(device_data["deviceSn"]):
                 await device.refresh()
+            elif device_data["productName"] in product_name_map:
+                device = product_name_map[device_data["productName"]](
+                    device_data, self.api
+                )
+                await device.refresh()  # Get all API data
+                self.devices.append(device)
             else:
-                if device_data["productName"] in product_name_map:
-                    device = product_name_map[device_data["productName"]](device_data, self.api)
-                    await device.refresh()  # Get all API data
-                    self.devices.append(device)
-                else:
-                    _LOGGER.error("Unsupported device found: %s", device_data["productName"])
+                _LOGGER.error(
+                    "Unsupported device found: %s", device_data["productName"]
+                )
 
     async def refresh_devices(self) -> bool:
         """Update all known devices states from the PETLIBRO API."""
